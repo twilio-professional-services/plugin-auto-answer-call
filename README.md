@@ -13,6 +13,10 @@ Sample demo is provided below :
 Any incoming task will be accepted as shown below :
 ![Plugin Demo](./readme-resources/auto-answer.gif)
 
+## Customize The Alert Sound
+
+You can customize the sound played to the agent through the use of the `.env` file. See the `.env.sample` file for instructions and an example alert sound.
+
 ## Requirements
 
 To deploy this plugin, you will need:
