@@ -25,16 +25,16 @@ To deploy this plugin, you will need:
 
 Make sure you have [Node.js](https://nodejs.org) as well as [`npm`](https://npmjs.com) installed.
 
-1. Clone this repo:
+1.  Clone this repo:
 
 ```bash
-https://github.com/cherylmj01/new-plugin-test.git
+https://github.com/twilio-professional-services/plugin-auto-answer-call.git
 ```
 
 2. Go to the plugin directory
 
 ```bash
-cd new-plugin-test
+cd plugin-auto-answer-call
 ```
 
 3. Install the dependencies
@@ -43,13 +43,13 @@ cd new-plugin-test
 npm install
 ```
 
-4. Run plugin on a local environment using :
+4. Run plugin on a local environment using Twilio CLI :
 
 ```bash
 twilio flex:plugins:start
 ```
 
-5. Deploy your plugin using :
+5. Deploy your plugin to your Flex project using Twilio CLI:
 
 ```bash
 twilio flex:plugins:deploy --major --changelog "Notes for this version" --description "Functionality of the plugin"
