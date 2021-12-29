@@ -15,7 +15,7 @@ Any incoming task will be accepted as shown below :
 
 ## Customize The Alert Sound
 
-You can customize the sound played to the agent through the use of the `.env` file. See the `.env.sample` file for instructions and an example alert sound.
+You can customize the sound played to the agent when a call connects through the use of the `.env` file. See the `.env.sample` file for instructions and an example alert sound.
 
 ## Requirements
 
