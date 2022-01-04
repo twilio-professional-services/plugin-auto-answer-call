@@ -19,13 +19,15 @@ export default class FlexAutoAnswerCallPlugin extends FlexPlugin {
   async init(flex, manager) {
     manager.workerClient.on('reservationCreated', (reservation) => {
       flex.Actions.invokeAction('AcceptTask', { sid: reservation.sid });
-      flex.Actions.invokeAction('SelectTask', { sid: reservation.sid });
-      flex.Actions.addListener('afterAcceptTask', (payload) => {
-        const mediaId = flex.AudioPlayerManager.play({
-          url: process.env.REACT_APP_ANNOUNCE_MEDIA,
-          repeatable: false,
-        });
+    });
+
+    flex.Actions.addListener('afterAcceptTask', (payload) => {
+      flex.Actions.invokeAction('SelectTask', { sid: payload.sid });
+      flex.AudioPlayerManager.play({
+        url: process.env.REACT_APP_ANNOUNCE_MEDIA,
+        repeatable: false,
       });
     });
+
   }
 }
