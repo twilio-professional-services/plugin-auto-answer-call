@@ -68,13 +68,17 @@ export const handleInputDeviceError = (reservation) => {
     console.warn(`Setting worker to ${audioDeviceErrorActivity ? audioDeviceErrorActivity.name : audioDeviceErrorActivitySid}`,
       'due to audio input device error');
     
-    Actions.invokeAction('SetActivity', { activitySid: audioDeviceErrorActivitySid });
+    // Setting "isInvokedByPlugin: true" for interoperability with plugin-activity-handler, found at
+    // https://github.com/twilio-professional-services/plugin-activity-handler
+    Actions.invokeAction('SetActivity', { activitySid: audioDeviceErrorActivitySid, isInvokedByPlugin: true });
   } else if (currentWorkerActivity.available && offlineActivitySid) {
     console.warn('AutoAnswerCallPlugin: audioDeviceErrorActivitySid not defined. Setting worker to',
       `${offlineActivity ? offlineActivity.name : offlineActivitySid} instead`,
       'to prevent new reservations while input device error is present');
 
-    Actions.invokeAction('SetActivity', { activitySid: offlineActivitySid });
+    // Setting "isInvokedByPlugin: true" for interoperability with plugin-activity-handler, found at
+    // https://github.com/twilio-professional-services/plugin-activity-handler
+    Actions.invokeAction('SetActivity', { activitySid: offlineActivitySid, isInvokedByPlugin: true });
   } else if (currentWorkerActivity.available) {
     // This is only for edge case handling since it would be unusual for the Flex
     // configuration to be missing "taskrouter_offline_activity_sid"
