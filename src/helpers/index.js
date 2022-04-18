@@ -28,26 +28,23 @@ const getInputDeviceIds = async () => {
     totalWaitTime += retryDelayMs;
   }
   
-  console.debug('AudioDeviceCheckPlugin: getInputDeviceIds totalWaitTime:', totalWaitTime);
   return inputDeviceIds;
 }
 
 export const checkInputDevice = async () => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    console.debug('AudioDeviceCheckPlugin: getUserMedia stream:', stream);
     stream.getTracks().forEach(track => track.stop());
 
     const inputDeviceIds = await getInputDeviceIds();
-    console.debug('AudioDeviceCheckPlugin: inputDeviceIds:', inputDeviceIds);
 
     if (inputDeviceIds.length > 0) {
-      console.log('AudioDeviceCheckPlugin: microphone found');
+      console.log('AutoAnswerCallPlugin: microphone found');
     } else {
       throw new Error('No microphone found in available input devices');
     }
   } catch (error) {
-    console.error('AudioDeviceCheckPlugin: error in getUserMedia.', error);
+    console.error('AutoAnswerCallPlugin: error in getUserMedia.', error);
     Notifications.showNotification(FlexNotification.inputDeviceError, { error });
     throw error;
   }

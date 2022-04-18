@@ -59,10 +59,10 @@ export const createListeners = () => {
 
     try {
       await checkInputDevice();
-      console.log('AudioDeviceCheckPlugin: Microphone check passed. Allowing activity change.');
+      console.log('AutoAnswerCallPlugin: Microphone check passed. Allowing activity change.');
     } catch (error) {
       // If input device check fails, prevent changing to an available activity
-      console.error('AudioDeviceCheckPlugin: Microphone check failed. Preventing activity change.');
+      console.error('AutoAnswerCallPlugin: Microphone check failed. Preventing activity change.');
       abortOriginal();
 
       handleInputDeviceError();
