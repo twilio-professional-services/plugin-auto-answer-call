@@ -53,23 +53,43 @@ export const checkInputDevice = async () => {
   }
 }
 
-export const handleInputDeviceError = () => {
+export const handleInputDeviceError = (reservation) => {
+  const activities = manager.workerClient?.activities || new Map();
+
   const audioDeviceErrorActivitySid = manager.serviceConfiguration
     ?.ui_attributes
     ?.audioDeviceCheckPlugin
     ?.audioDeviceErrorActivitySid;
+  const audioDeviceErrorActivity = activities.get(audioDeviceErrorActivitySid);
   
-  const offlineActivitySid = manager.serviceConfiguration
-    ?.taskrouter_offline_activity_sid;
+  const offlineActivitySid = manager.serviceConfiguration?.taskrouter_offline_activity_sid;
+  const offlineActivity = activities.get(offlineActivitySid);
+
+  const currentWorkerActivity = manager.workerClient?.activity || {};
 
   if (audioDeviceErrorActivitySid) {
+    console.warn(`Setting worker to ${audioDeviceErrorActivity ? audioDeviceErrorActivity.name : audioDeviceErrorActivitySid}`,
+      'due to input device error');
+    
     Actions.invokeAction('SetActivity', { activitySid: audioDeviceErrorActivitySid });
-  } else if (offlineActivitySid) {
-    console.warn('AutoAnswerCallPlugin: audioDeviceErrorActivitySid not defined. Setting worker to Offline instead');
+  } else if (currentWorkerActivity.available && offlineActivitySid) {
+    console.warn('AutoAnswerCallPlugin: audioDeviceErrorActivitySid not defined. Setting worker to',
+      `${offlineActivity ? offlineActivity.name : offlineActivitySid} instead`,
+      'to prevent new reservations while input device error is present');
+
     Actions.invokeAction('SetActivity', { activitySid: offlineActivitySid });
-  } else {
+  } else if (currentWorkerActivity.available) {
+    // This is only for edge case handling since it would be unusual for the Flex
+    // configuration to be missing "taskrouter_offline_activity_sid"
     console.warn('AutoAnswerCallPlugin: Neither audioDeviceErrorActivitySid or offlineActivitySid defined.',
-      'Unable to change worker activity to prevent new reservations while input device error present');
+      'Unable to change worker activity to prevent new reservations while input device error is present');
+    
+    if (reservation) {
+      // Only invoking reservation reject at this point since the above "SetActivity"
+      // actions automatically reject any pending reservations. Without an activity
+      // to change the worker to, the reservation must be explicitly rejected.
+      reservation.reject();
+    }
   }
 }
 

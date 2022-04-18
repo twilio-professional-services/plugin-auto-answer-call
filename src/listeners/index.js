@@ -24,7 +24,7 @@ export const createListeners = () => {
       } catch (error) {
         console.error('AutoAnswerCallPlugin: Microphone check failed. Rejecting reservation.');
 
-        handleInputDeviceError();
+        handleInputDeviceError(reservation);
         return;
       }
     }
