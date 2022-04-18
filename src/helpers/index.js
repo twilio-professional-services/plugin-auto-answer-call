@@ -66,7 +66,7 @@ export const handleInputDeviceError = (reservation) => {
 
   if (audioDeviceErrorActivitySid) {
     console.warn(`Setting worker to ${audioDeviceErrorActivity ? audioDeviceErrorActivity.name : audioDeviceErrorActivitySid}`,
-      'due to input device error');
+      'due to audio input device error');
     
     Actions.invokeAction('SetActivity', { activitySid: audioDeviceErrorActivitySid });
   } else if (currentWorkerActivity.available && offlineActivitySid) {

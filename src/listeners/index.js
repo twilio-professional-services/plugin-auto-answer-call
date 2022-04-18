@@ -59,13 +59,28 @@ export const createListeners = () => {
 
     try {
       await checkInputDevice();
-      console.log('AutoAnswerCallPlugin: Microphone check passed. Allowing activity change.');
     } catch (error) {
       // If input device check fails, prevent changing to an available activity
-      console.error('AutoAnswerCallPlugin: Microphone check failed. Preventing activity change.');
+      console.error('AutoAnswerCallPlugin: Microphone check failed. Preventing activity change');
       abortOriginal();
 
       handleInputDeviceError();
     }
   });
+
+  Actions.addListener('beforeStartOutboundCall', async (payload, abortOriginal) => {
+    if (!isAudioDeviceCheckEnabled()) {
+      // Not performing audio device check if it's not enabled in Flex configuration
+      return;
+    }
+
+    try {
+      await checkInputDevice();
+    } catch (error) {
+      console.error('AutoAnswerCallPlugin: Microphone check failed. Preventing outbound call');
+      abortOriginal();
+
+      handleInputDeviceError();
+    }
+  })
 }
