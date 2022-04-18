@@ -1,5 +1,5 @@
 import React from 'react';
-import { VERSION } from '@twilio/flex-ui';
+import { TaskHelper, VERSION } from '@twilio/flex-ui';
 import { FlexPlugin } from '@twilio/flex-plugin';
 
 const PLUGIN_NAME = 'FlexAutoAnswerCallPlugin';
@@ -18,15 +18,24 @@ export default class FlexAutoAnswerCallPlugin extends FlexPlugin {
    */
   async init(flex, manager) {
     manager.workerClient.on('reservationCreated', (reservation) => {
-      flex.Actions.invokeAction('AcceptTask', { sid: reservation.sid });
+      const task = TaskHelper.getTaskByTaskSid(reservation.sid);
+      
+      // Only auto accept if it's not an outbound call from Flex
+      if (!TaskHelper.isInitialOutboundAttemptTask(task)) {
+        flex.Actions.invokeAction('AcceptTask', { sid: reservation.sid, isAutoAccept: true });
+      }
     });
 
     flex.Actions.addListener('afterAcceptTask', (payload) => {
-      flex.Actions.invokeAction('SelectTask', { sid: payload.sid });
-      flex.AudioPlayerManager.play({
-        url: process.env.REACT_APP_ANNOUNCE_MEDIA,
-        repeatable: false,
-      });
+      // Only executing this code if the task was auto accepted by a plugin,
+      // indicated by that plugin passing "isAutoAccept: true" in the payload
+      if (payload.isAutoAccept) {
+        flex.Actions.invokeAction('SelectTask', { sid: payload.sid });
+        flex.AudioPlayerManager.play({
+          url: process.env.REACT_APP_ANNOUNCE_MEDIA,
+          repeatable: false,
+        });
+      }
     });
 
   }
