@@ -1,6 +1,10 @@
 import React from 'react';
-import { TaskHelper, VERSION } from '@twilio/flex-ui';
+import { VERSION } from '@twilio/flex-ui';
 import { FlexPlugin } from '@twilio/flex-plugin';
+
+import { registerNotifications } from './notifications';
+import { createListeners } from './listeners';
+import { checkInputDevice, handleInputDeviceError, isWorkerVoiceEnabled } from './helpers';
 
 const PLUGIN_NAME = 'FlexAutoAnswerCallPlugin';
 
@@ -17,26 +21,14 @@ export default class FlexAutoAnswerCallPlugin extends FlexPlugin {
    * @param manager { import('@twilio/flex-ui').Manager }
    */
   async init(flex, manager) {
-    manager.workerClient.on('reservationCreated', (reservation) => {
-      const task = TaskHelper.getTaskByTaskSid(reservation.sid);
-      
-      // Only auto accept if it's not an outbound call from Flex
-      if (!TaskHelper.isInitialOutboundAttemptTask(task)) {
-        flex.Actions.invokeAction('AcceptTask', { sid: reservation.sid, isAutoAccept: true });
-      }
-    });
+    registerNotifications();
 
-    flex.Actions.addListener('afterAcceptTask', (payload) => {
-      // Only executing this code if the task was auto accepted by a plugin,
-      // indicated by that plugin passing "isAutoAccept: true" in the payload
-      if (payload.isAutoAccept) {
-        flex.Actions.invokeAction('SelectTask', { sid: payload.sid });
-        flex.AudioPlayerManager.play({
-          url: process.env.REACT_APP_ANNOUNCE_MEDIA,
-          repeatable: false,
-        });
-      }
-    });
+    createListeners();
 
+    if (isWorkerVoiceEnabled()) {
+      checkInputDevice().catch(error => {
+        handleInputDeviceError();
+      });
+    }
   }
 }
