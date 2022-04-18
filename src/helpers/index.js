@@ -54,10 +54,22 @@ export const checkInputDevice = async () => {
 }
 
 export const handleInputDeviceError = () => {
-  const audioDeviceErrorActivitySid = manager.serviceConfiguration?.ui_attributes?.audioDeviceErrorActivitySid;
+  const audioDeviceErrorActivitySid = manager.serviceConfiguration
+    ?.ui_attributes
+    ?.audioDeviceCheckPlugin
+    ?.audioDeviceErrorActivitySid;
+  
+  const offlineActivitySid = manager.serviceConfiguration
+    ?.taskrouter_offline_activity_sid;
 
   if (audioDeviceErrorActivitySid) {
     Actions.invokeAction('SetActivity', { activitySid: audioDeviceErrorActivitySid });
+  } else if (offlineActivitySid) {
+    console.warn('AutoAnswerCallPlugin: audioDeviceErrorActivitySid not defined. Setting worker to Offline instead');
+    Actions.invokeAction('SetActivity', { activitySid: offlineActivitySid });
+  } else {
+    console.warn('AutoAnswerCallPlugin: Neither audioDeviceErrorActivitySid or offlineActivitySid defined.',
+      'Unable to change worker activity to prevent new reservations while input device error present');
   }
 }
 
@@ -67,4 +79,13 @@ export const isWorkerVoiceEnabled = () => {
   const voiceChannel = Array.from(workerChannels.values()).find(c => c.taskChannelUniqueName === 'voice');
   
   return voiceChannel ? voiceChannel.available : false;
+}
+
+export const isAudioDeviceCheckEnabled = () => {
+  const isDeviceCheckEnabled = manager.serviceConfiguration
+    ?.ui_attributes
+    ?.audioDeviceCheckPlugin
+    ?.isDeviceCheckEnabled;
+
+  return isDeviceCheckEnabled ? true : false;
 }

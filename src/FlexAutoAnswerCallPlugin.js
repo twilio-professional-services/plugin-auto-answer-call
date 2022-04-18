@@ -4,7 +4,12 @@ import { FlexPlugin } from '@twilio/flex-plugin';
 
 import { registerNotifications } from './notifications';
 import { createListeners } from './listeners';
-import { checkInputDevice, handleInputDeviceError, isWorkerVoiceEnabled } from './helpers';
+import {
+  checkInputDevice,
+  handleInputDeviceError,
+  isAudioDeviceCheckEnabled,
+  isWorkerVoiceEnabled
+} from './helpers';
 
 const PLUGIN_NAME = 'FlexAutoAnswerCallPlugin';
 
@@ -25,7 +30,7 @@ export default class FlexAutoAnswerCallPlugin extends FlexPlugin {
 
     createListeners();
 
-    if (isWorkerVoiceEnabled()) {
+    if (isWorkerVoiceEnabled() && isAudioDeviceCheckEnabled()) {
       checkInputDevice().catch(error => {
         handleInputDeviceError();
       });
