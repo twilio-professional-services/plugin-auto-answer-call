@@ -39,7 +39,7 @@ export const checkInputDevice = async () => {
     const inputDeviceIds = await getInputDeviceIds();
 
     if (inputDeviceIds.length > 0) {
-      console.log('AutoAnswerCallPlugin: microphone found');
+      console.log('AutoAnswerCallPlugin: input device check passed');
     } else {
       throw new Error('No microphone found in available input devices');
     }
@@ -47,6 +47,26 @@ export const checkInputDevice = async () => {
     console.error('AutoAnswerCallPlugin: error in getUserMedia.', error);
     Notifications.showNotification(FlexNotification.inputDeviceError, { error });
     throw error;
+  }
+}
+
+export const checkMicrophoneID = () => {
+  const state = manager.store.getState()?.flex;
+
+  // These if conditionals mirror native Flex UI logic executed 
+  // when a new incoming voice client call is detected
+  if (state?.config?.initialDeviceCheck) {
+    const microphoneID = state?.phone?.listener?.microphoneID;
+
+    if (!microphoneID) {
+      console.error('AutoAnswerCallPlugin: no microphone ID found. ID value:', 
+        microphoneID === '' ? '""' : microphoneID
+      );
+
+      const error = 'No microphone ID found';
+      Notifications.showNotification(FlexNotification.inputDeviceError, { error });
+      throw new Error(error);
+    }
   }
 }
 

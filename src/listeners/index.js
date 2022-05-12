@@ -2,11 +2,13 @@ import {
   Actions,
   AudioPlayerManager,
   Manager,
+  Notifications,
   TaskHelper
 } from '@twilio/flex-ui';
 
 import {
   checkInputDevice,
+  checkMicrophoneID,
   handleInputDeviceError,
   isAudioDeviceCheckEnabled,
   isWorkerVoiceEnabled
@@ -21,8 +23,9 @@ export const createListeners = () => {
     if (TaskHelper.isCallTask(task) && isAudioDeviceCheckEnabled()) {
       try {
         await checkInputDevice();
+        checkMicrophoneID();
       } catch (error) {
-        console.error('AutoAnswerCallPlugin: Microphone check failed. Rejecting reservation.');
+        console.error('AutoAnswerCallPlugin: Input device check failed. Rejecting reservation.');
 
         handleInputDeviceError(reservation);
         return;
@@ -40,8 +43,10 @@ export const createListeners = () => {
     // indicated by that plugin passing "isAutoAccept: true" in the payload
     if (payload.isAutoAccept) {
       Actions.invokeAction('SelectTask', { sid: payload.sid });
+      
+      const announceMediaUrl = manager.serviceConfiguration?.ui_attributes?.annouceMedia;
       AudioPlayerManager.play({
-        url: process.env.REACT_APP_ANNOUNCE_MEDIA,
+        url: announceMediaUrl || process.env.REACT_APP_ANNOUNCE_MEDIA,
         repeatable: false,
       });
     }
@@ -59,9 +64,10 @@ export const createListeners = () => {
 
     try {
       await checkInputDevice();
+      checkMicrophoneID();
     } catch (error) {
       // If input device check fails, prevent changing to an available activity
-      console.error('AutoAnswerCallPlugin: Microphone check failed. Preventing activity change');
+      console.error('AutoAnswerCallPlugin: Input device check failed. Preventing activity change');
       abortOriginal();
 
       handleInputDeviceError();
@@ -74,13 +80,42 @@ export const createListeners = () => {
       return;
     }
 
+    if (manager.serviceConfiguration?.ui_attributes?.activityHandlerPlugin) {
+      // The plugin-activity-handler logic will set the worker to the configured
+      // "On a Task" activity in its beforeStartOutbound call listener, risking
+      // the agent staying in that activity if the audio device check fails and
+      // this plugin aborts the StartOutboundCall action. So if this account
+      // is also using plugin-activity-handler, the audio device check will not
+      // be performed on StartOutboundCall. Instead, if the outbound call fails
+      // due to an input device error, it will be handled in the beforeAddNotification
+      // event listener
+      return;
+    }
+
     try {
       await checkInputDevice();
+      checkMicrophoneID();
     } catch (error) {
-      console.error('AutoAnswerCallPlugin: Microphone check failed. Preventing outbound call');
+      console.error('AutoAnswerCallPlugin: Input device check failed. Preventing outbound call');
       abortOriginal();
 
       handleInputDeviceError();
     }
-  })
+  });
+
+  if (manager.serviceConfiguration?.ui_attributes?.activityHandlerPlugin) {
+    // See note in beforeStartOutboundCall listener for more information on this
+    // check if the account is also using plugin-activity-handler
+
+    Notifications.addListener('beforeAddNotification', payload => {
+      if (!isAudioDeviceCheckEnabled()) {
+        // Not handling input device error if it's not enabled in Flex configuration
+        return;
+      }
+
+      if (payload.id === 'NoInputDevice') {
+        handleInputDeviceError();
+      }
+    });
+  }
 }
