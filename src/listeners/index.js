@@ -7,35 +7,53 @@ import {
 } from '@twilio/flex-ui';
 
 import {
-  checkInputDevice,
+  checkInputDevicePermission,
   checkMicrophoneID,
   handleInputDeviceError,
   isAudioDeviceCheckEnabled,
-  isWorkerVoiceEnabled
+  isAudioDeviceWorkaroundEnabled,
+  isWorkerVoiceEnabled,
+  validateInputDevice
 } from '../helpers';
 
 const manager = Manager.getInstance();
 
-export const createListeners = () => {
-  manager.workerClient.on('reservationCreated', async (reservation) => {
-    const task = TaskHelper.getTaskByTaskSid(reservation.sid);
+const handleNewReservation = async (reservation) => {
+  const task = TaskHelper.getTaskByTaskSid(reservation.sid);
 
-    if (TaskHelper.isCallTask(task) && isAudioDeviceCheckEnabled()) {
-      try {
-        await checkInputDevice();
+  if (TaskHelper.isCallTask(task) && isAudioDeviceCheckEnabled) {
+    try {
+      await checkInputDevicePermission();
+      if (isAudioDeviceWorkaroundEnabled) {
+        await validateInputDevice();
+      } else {
         checkMicrophoneID();
-      } catch (error) {
-        console.error('AutoAnswerCallPlugin: Input device check failed. Rejecting reservation.');
-
-        handleInputDeviceError(reservation);
-        return;
       }
+    } catch (error) {
+      console.error('AutoAnswerCallPlugin: Input device check failed. Rejecting reservation.');
+
+      handleInputDeviceError(error, reservation);
+      return;
     }
-    
-    // Only auto accept if it's not an outbound call from Flex
-    if (!TaskHelper.isInitialOutboundAttemptTask(task)) {
-      Actions.invokeAction('AcceptTask', { sid: reservation.sid, isAutoAccept: true });
-    }
+  }
+  
+  // Only auto accept if it's not an outbound call from Flex
+  if (!TaskHelper.isInitialOutboundAttemptTask(task)) {
+    Actions.invokeAction('AcceptTask', { sid: reservation.sid, isAutoAccept: true });
+  }
+}
+
+export const createListeners = () => {
+  manager.events.addListener('pluginsLoaded', () => {
+    manager.workerClient.reservations.forEach(reservation => {
+      if (reservation.status === 'pending') {
+        handleNewReservation(reservation);
+      }
+    });
+  });
+
+  manager.workerClient.on('reservationCreated', (reservation) => {
+    handleNewReservation(reservation);
   });
 
   Actions.addListener('afterAcceptTask', (payload) => {
@@ -56,50 +74,59 @@ export const createListeners = () => {
     if (!payload.activityAvailable) {
       // No need to perform audio check if not attempting to change to an available activity
       return;
-    } else if (!isWorkerVoiceEnabled() || !isAudioDeviceCheckEnabled()) {
+    } else if (!isWorkerVoiceEnabled() || !isAudioDeviceCheckEnabled) {
       // No need to perform audio check if worker's voice task channel isn't enabled
       // or audio device check is not enabled in the Flex configuration
       return;
     }
 
     try {
-      await checkInputDevice();
-      checkMicrophoneID();
+      await checkInputDevicePermission();
+      if (isAudioDeviceWorkaroundEnabled) {
+        await validateInputDevice();
+      } else {
+        checkMicrophoneID();
+      }
     } catch (error) {
       // If input device check fails, prevent changing to an available activity
       console.error('AutoAnswerCallPlugin: Input device check failed. Preventing activity change');
       abortOriginal();
 
-      handleInputDeviceError();
+      handleInputDeviceError(error);
     }
   });
 
   Actions.addListener('beforeStartOutboundCall', async (payload, abortOriginal) => {
-    if (!isAudioDeviceCheckEnabled()) {
+    if (!isAudioDeviceCheckEnabled) {
       // Not performing audio device check if it's not enabled in Flex configuration
       return;
     }
 
-    if (manager.serviceConfiguration?.ui_attributes?.activityHandlerPlugin) {
-      // The plugin-activity-handler logic will set the worker to the configured
-      // "On a Task" activity in its beforeStartOutbound call listener, risking
-      // the agent staying in that activity if the audio device check fails and
-      // this plugin aborts the StartOutboundCall action. So if this account
-      // is also using plugin-activity-handler, the audio device check will not
-      // be performed on StartOutboundCall. Instead, if the outbound call fails
-      // due to an input device error, it will be handled in the beforeAddNotification
-      // event listener
-      return;
-    }
-
     try {
-      await checkInputDevice();
-      checkMicrophoneID();
-    } catch (error) {
-      console.error('AutoAnswerCallPlugin: Input device check failed. Preventing outbound call');
-      abortOriginal();
-
-      handleInputDeviceError();
+      await checkInputDevicePermission();
+      if (isAudioDeviceWorkaroundEnabled) {
+        await validateInputDevice();
+      } else {
+        checkMicrophoneID();
+      }
+    } catch (error) {      
+      if (manager.serviceConfiguration?.ui_attributes?.activityHandlerPlugin) {
+        console.error('AutoAnswerCallPlugin: Input device check failed.', error);
+        // The plugin-activity-handler logic will set the worker to the configured
+        // "On a Task" activity in its beforeStartOutbound call listener, risking
+        // the agent staying in that activity if the audio device check fails and
+        // this plugin aborts the StartOutboundCall action. So if this account
+        // is also using plugin-activity-handler, the audio device check will not
+        // be performed on StartOutboundCall. Instead, if the outbound call fails
+        // due to an input device error, it will be handled in the beforeAddNotification
+        // event listener
+        return;
+      } else {
+        console.error('AutoAnswerCallPlugin: Input device check failed. Preventing outbound call');
+        abortOriginal();
+  
+        handleInputDeviceError(error);
+      }
     }
   });
 
@@ -108,7 +135,7 @@ export const createListeners = () => {
     // check if the account is also using plugin-activity-handler
 
     Notifications.addListener('beforeAddNotification', payload => {
-      if (!isAudioDeviceCheckEnabled()) {
+      if (!isAudioDeviceCheckEnabled) {
         // Not handling input device error if it's not enabled in Flex configuration
         return;
       }

@@ -4,48 +4,14 @@ import { FlexNotification } from '../enums';
 
 const manager = Manager.getInstance();
 
-const sleep = (milliseconds) => new Promise(resolve => setTimeout(resolve, milliseconds));
-
-const getInputDeviceIds = async () => {
-  const retryDelayMs = 250;
-  const maxWaitTime = 5000;
-  let totalWaitTime = 0;
-  let inputDeviceIds;
-  
-  while (totalWaitTime < maxWaitTime) {
-    const availableInputDevices = manager.voiceClient?.audio?.availableInputDevices?.keys();
-    inputDeviceIds = (availableInputDevices && Array.from(availableInputDevices)) || [];
-
-    if (inputDeviceIds.length === 0 ||
-      inputDeviceIds.length === 1 && inputDeviceIds[0] === '') {
-      // Still waiting for manager.voiceClient to populate input devices
-      await sleep(retryDelayMs);
-    } else {
-      // Input devices populated
-      break;
-    }
-
-    totalWaitTime += retryDelayMs;
-  }
-  
-  return inputDeviceIds;
-}
-
-export const checkInputDevice = async () => {
+export const checkInputDevicePermission = async () => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach(track => track.stop());
 
-    const inputDeviceIds = await getInputDeviceIds();
-
-    if (inputDeviceIds.length > 0) {
-      console.log('AutoAnswerCallPlugin: input device check passed');
-    } else {
-      throw new Error('No microphone found in available input devices');
-    }
+    console.log('AutoAnswerCallPlugin: input device permissions check passed');
   } catch (error) {
     console.error('AutoAnswerCallPlugin: error in getUserMedia.', error);
-    Notifications.showNotification(FlexNotification.inputDeviceError, { error });
     throw error;
   }
 }
@@ -63,14 +29,84 @@ export const checkMicrophoneID = () => {
         microphoneID === '' ? '""' : microphoneID
       );
 
-      const error = 'No microphone ID found';
-      Notifications.showNotification(FlexNotification.inputDeviceError, { error });
-      throw new Error(error);
+      throw new Error('No microphone ID found');
     }
   }
 }
 
-export const handleInputDeviceError = (reservation) => {
+const waitForDeviceIdUpdate = (deviceId) => new Promise((resolve, reject) => {
+  const maxWaitTimeMs = 2000;
+  const retryDelayMs = 100;
+  let totalWaitTimeMs = 0;
+
+  const phoneState = manager.store.getState().flex?.phone?.listener;
+
+  const deviceIdCheckInterval = setInterval(() => {
+    totalWaitTimeMs += retryDelayMs;
+    if (totalWaitTimeMs >= maxWaitTimeMs) {
+      clearInterval(deviceIdCheckInterval);
+      reject(`Timed out waiting for Microphone ID to be set to ${deviceId}`);
+    } else if (phoneState?.microphoneID === deviceId) {
+      clearInterval(deviceIdCheckInterval);
+      resolve();
+    }
+  }, retryDelayMs);
+});
+
+export const validateInputDevice = async () => {
+  // This function was created to workaround an issue with the voice client
+  // availableInputDevices map only containing a single entry that is not
+  // a valid device, but instead has an empty string for the key, which 
+  // doesn't match any valid media devices. This behavior was observed in
+  // Flex instances running in Microsoft Azure VDI remote desktop sessions.
+  const phoneState = manager.store.getState().flex?.phone?.listener;
+  const clientAudio = manager.voiceClient?.audio;
+
+  if (!phoneState) {
+    throw new Error('Flex phone state not found. Please refresh your Flex browser.');
+  }
+  if (!clientAudio) {
+    throw new Error('Voice client audio not found. Please refresh your Flex browser.')
+  }
+
+  const defaultInputDevice = clientAudio.availableInputDevices.get('default');
+  const firstInputDevice = clientAudio.availableInputDevices.get(
+    clientAudio.availableInputDevices.keys()[0]
+  );
+
+  const chosenInputDevice = defaultInputDevice ? defaultInputDevice : firstInputDevice;
+
+  if (chosenInputDevice && 
+    chosenInputDevice.deviceId && 
+    chosenInputDevice.deviceId === phoneState.microphoneID) {
+
+    console.log('AutoAnswerCallPlugin: input device ready. deviceId:', chosenInputDevice.deviceId);
+    return;
+  }
+
+  // Looking for a valid media device only if the above input device check failed
+  console.warn('AutoAnswerCallPlugin: missing input device, attempting to repair');
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const defaultMediaDevice = Array.isArray(devices) && devices.find(d => d.deviceId === 'default');
+  const firstMediaDevice = Array.isArray(devices) && devices[0];
+
+  const chosenMediaDevice = defaultMediaDevice ? defaultMediaDevice : firstMediaDevice;
+
+  if (chosenMediaDevice && chosenMediaDevice.deviceId) {
+    clientAudio.availableInputDevices.set(chosenMediaDevice.deviceId, chosenMediaDevice);
+    phoneState.handleDeviceChange();
+    await waitForDeviceIdUpdate(chosenMediaDevice.deviceId);
+    console.log('AutoAnswerCallPlugin: input device ready. deviceId:', chosenMediaDevice.deviceId);
+  } else {
+    throw new Error('No microphone found in available media devices');
+  }
+}
+
+export const handleInputDeviceError = (error, reservation) => {
+  if (error) {
+    Notifications.showNotification(FlexNotification.inputDeviceError, { error });
+  }
+
   const activities = manager.workerClient?.activities || new Map();
 
   const audioDeviceErrorActivitySid = manager.serviceConfiguration
@@ -122,11 +158,16 @@ export const isWorkerVoiceEnabled = () => {
   return voiceChannel ? voiceChannel.available : false;
 }
 
-export const isAudioDeviceCheckEnabled = () => {
-  const isDeviceCheckEnabled = manager.serviceConfiguration
+const audioDeviceCheckPluginConfig = (
+  manager.serviceConfiguration
     ?.ui_attributes
     ?.audioDeviceCheckPlugin
-    ?.isDeviceCheckEnabled;
+);
 
-  return isDeviceCheckEnabled ? true : false;
-}
+export const isAudioDeviceCheckEnabled = (
+  audioDeviceCheckPluginConfig?.isDeviceCheckEnabled === true ? true : false
+);
+
+export const isAudioDeviceWorkaroundEnabled = (
+  audioDeviceCheckPluginConfig?.isWorkaroundEnabled === true ? true : false
+);
